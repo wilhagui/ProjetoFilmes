@@ -19,22 +19,37 @@ def buscar_filmes_por_titulo(titulo):
     return response.json()
 
 
-# Função para mostrar os detalhes do filme
+# Função para mostrar os detalhes completos do filme
 def mostrar_detalhes(filme):
     texto.delete(1.0, "end")
 
+    # Informações do filme
     texto.insert("end", f"🎬 Título: {filme.get('title', 'Desconhecido')}\n\n")
     texto.insert("end", f"📝 Sinopse: {filme.get('overview', 'Sem sinopse disponível.')}\n\n")
+
+    # Data de lançamento
+    texto.insert("end", f"📅 Data de Lançamento: {filme.get('release_date', 'Não disponível')}\n\n")
+
+    # Gêneros
+    generos = ", ".join([g['name'] for g in filme.get('genres', [])])
+    texto.insert("end", f"🎭 Gêneros: {generos if generos else 'Não disponível'}\n\n")
+
+    # Avaliação
     nota = filme.get('vote_average', 0)
     estrelas = "⭐" * int(round(nota / 2))
     texto.insert("end", f"⭐ Avaliação: {nota}/10  {estrelas}\n\n")
 
+    # Elenco (os 3 primeiros atores)
     texto.insert("end", "👥 Elenco:\n")
-    for ator in filme['credits']['cast'][:3]:
-        texto.insert("end", f"  - {ator['name']} como {ator['character']}\n")
+    if 'credits' in filme and 'cast' in filme['credits']:
+        for ator in filme['credits']['cast'][:5]:
+            texto.insert("end", f"  - {ator['name']} como {ator['character']}\n")
+    else:
+        texto.insert("end", "  - Elenco não disponível.\n")
 
     # Trailer
-    trailers = [v for v in filme['videos']['results'] if v['type'] == 'Trailer' and v['site'] == 'YouTube']
+    trailers = [v for v in filme.get('videos', {}).get('results', []) if
+                v['type'] == 'Trailer' and v['site'] == 'YouTube']
     if trailers:
         global link_trailer
         link_trailer = f"https://youtube.com/watch?v={trailers[0]['key']}"
@@ -43,13 +58,23 @@ def mostrar_detalhes(filme):
         link_trailer = None
         texto.insert("end", "\n🎞️ Trailer: Não disponível\n")
 
-    # Avaliações
-    texto.insert("end", "\n💬 Avaliação:\n")
-    if filme['reviews']['results']:
-        review = filme['reviews']['results'][0]
-        texto.insert("end", f"  - {review['author']}: {review['content'][:300]}...\n")
+    # Avaliações do filme (mostra as 3 primeiras)
+    texto.insert("end", "\n💬 Avaliações:\n")
+    if 'reviews' in filme and 'results' in filme['reviews']:
+        for review in filme['reviews']['results'][:3]:
+            texto.insert("end", f"  - {review['author']}: {review['content'][:300]}...\n")
     else:
         texto.insert("end", "  - Nenhuma avaliação encontrada.\n")
+
+    # Mostrar imagens
+    imagens = filme.get('images', {}).get('backdrops', [])
+    if imagens:
+        texto.insert("end", "\n📸 Imagens relacionadas:\n")
+        for img in imagens[:3]:  # Exibir até 3 imagens
+            img_url = f"https://image.tmdb.org/t/p/w300{img['file_path']}"
+            texto.insert("end", f"  - {img_url}\n")
+    else:
+        texto.insert("end", "  - Nenhuma imagem disponível.\n")
 
     # Mostrar pôster
     carregar_poster(filme.get("poster_path"))
@@ -58,20 +83,28 @@ def mostrar_detalhes(filme):
 # Função para carregar e exibir o pôster
 def carregar_poster(poster_path):
     if not poster_path:
+        # Se não houver caminho para o pôster, não faz nada
         return
 
+    # Construir a URL correta para o pôster
     url = f"https://image.tmdb.org/t/p/w300{poster_path}"
-    response = requests.get(url)
 
+    # Fazer o download da imagem
     try:
-        imagem = Image.open(BytesIO(response.content))
-        imagem = imagem.resize((200, 300))  # Ajusta o tamanho do pôster
+        response = requests.get(url)
+        response.raise_for_status()  # Levanta um erro se o status da resposta não for 200
+        imagem = Image.open(BytesIO(response.content))  # Carregar a imagem no formato adequado
+        imagem = imagem.resize((200, 300))  # Ajusta o tamanho do pôster para a tela
+
+        # Converter a imagem para o formato adequado para o Tkinter
         poster_tk = ImageTk.PhotoImage(imagem)
+
+        # Exibir o pôster na interface
         poster_label.configure(image=poster_tk)
-        poster_label.image = poster_tk  # Mantém a referência
-    except Exception as e:
+        poster_label.image = poster_tk  # Manter a referência da imagem
+    except requests.exceptions.RequestException as e:
         print(f"Erro ao carregar o pôster: {e}")
-        # Se não conseguir carregar a imagem, pode colocar uma imagem padrão
+        # Caso ocorra erro, exibe uma imagem padrão ou limpa o label
         poster_label.configure(image='')
         poster_label.image = None
 
