@@ -280,38 +280,45 @@ def abrir_analise_dados():
     canvas.get_tk_widget().pack(fill=BOTH, expand=True)
 
 def mostrar_top_brasileiros():
+    # Limpar o frame
+    for widget in top_br_frame.winfo_children():
+        widget.destroy()
+
+    url = "https://api.themoviedb.org/3/discover/movie"
+    params = {
+        "api_key": API_KEY,
+        "language": "pt-BR",
+        "region": "BR",
+        "sort_by": "vote_average.desc",
+        "with_original_language": "pt",
+        "vote_count.gte": 50,  # Garante que apenas filmes com um número mínimo de votos sejam considerados
+        "page": 1
+    }
+
     try:
-        with open("cache_filmes.json", "r", encoding="utf-8") as f:
-            dados = json.load(f)
-    except FileNotFoundError:
-        Messagebox.show_error("Erro", "Arquivo 'cache_filmes.json' não encontrado.")
+        resposta = requests.get(url, params=params)
+        resposta.raise_for_status()
+        dados = resposta.json()
+
+        # Verificando a resposta para entender o que foi retornado
+        print("Resposta da API:", dados)
+
+        filmes = dados.get("results", [])
+        if len(filmes) < 10:
+            print(f"Apenas {len(filmes)} filmes retornados.")
+
+    except Exception as e:
+        Messagebox.show_error("Erro na API", str(e))
         return
 
-    # Filtrar filmes brasileiros
-    filmes_brasileiros = [f for f in dados if f.get("original_language") == "pt"]
-    if not filmes_brasileiros:
-        Messagebox.show_info("Sem dados", "Nenhum filme brasileiro encontrado.")
-        return
+    tb.Label(top_br_frame, text="🇧🇷 Top 10 Filmes Brasileiros", font=("Segoe UI", 12, "bold")).pack(anchor="w")
 
-    # Ordenar pelos mais bem avaliados
-    filmes_brasileiros.sort(key=lambda f: f.get("vote_average", 0), reverse=True)
-    top_brasileiros = filmes_brasileiros[:5]
-
-    # Criar janela para exibição
-    janela = tb.Toplevel(app)
-    janela.title("🇧🇷 Top Filmes Brasileiros")
-    janela.geometry("600x400")
-
-    texto_brasileiros = scrolledtext.ScrolledText(janela, wrap="word", font=("Segoe UI", 11))
-    texto_brasileiros.pack(fill="both", expand=True, padx=10, pady=10)
-
-    for filme in top_brasileiros:
+    for idx, filme in enumerate(filmes[:10], start=1):  # Pega no máximo 10 filmes
         titulo = filme.get("title", "Sem título")
         nota = filme.get("vote_average", 0)
-        sinopse = filme.get("overview", "Sem sinopse.")
-        texto_brasileiros.insert("end", f"🎬 {titulo}\n⭐ Nota: {nota}/10\n📝 {sinopse}\n\n")
-
-    texto_brasileiros.configure(state="disabled")
+        estrelas = "⭐" * int(round(nota / 2))
+        texto = f"{idx}. {titulo} — Nota: {nota:.1f} {estrelas}"
+        tb.Label(top_br_frame, text=texto, anchor="w", justify="left").pack(fill=X, padx=10)
 
 
 
@@ -375,5 +382,10 @@ btn_trandig_top.pack(pady=6, padx=15, fill=X)
 btn_top_genero = ttk.Button(painel_esquerdo, text="🎭 Top Gênero", bootstyle="info-outline")
 btn_top_genero.pack(pady=6, padx=15, fill=X)
 
+btn_oscar_brasileiro = ttk.Button(painel_esquerdo, text="Indicados ao Oscar Brasileiro", bootstyle="info-outline")
+btn_oscar_brasileiro.pack(pady=6, padx=15, fill=X)
+
+top_br_frame = tb.Frame(app)
+top_br_frame.pack(padx=10, pady=10, fill=X)
 
 app.mainloop()
